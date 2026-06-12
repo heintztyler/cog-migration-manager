@@ -1,4 +1,6 @@
+import time
 import uuid
+import logging
 from fastapi import APIRouter, HTTPException
 from app.models import (
     DatasetInfo, SchemaInfo, SchemaField, SystemInfo,
@@ -6,8 +8,14 @@ from app.models import (
 )
 from app.legacy_systems import system_alpha, system_bravo
 from app.unified_system import target_schema
+from app.devin_client import DevinClient
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/datasets", tags=["datasets"])
+
+_devin_client = DevinClient()
+_last_poll_time: float = 0
+POLL_INTERVAL_SECONDS = 5
 
 
 def _compute_stage(state: dict) -> KanbanStage:
@@ -33,9 +41,65 @@ def _compute_stage(state: dict) -> KanbanStage:
     return KanbanStage.BACKLOG
 
 
+async def _refresh_active_sessions() -> None:
+    """Poll the Devin API for active sessions and update migration state with PR info."""
+    global _last_poll_time
+    if not _devin_client.is_configured:
+        return
+    now = time.time()
+    if now - _last_poll_time < POLL_INTERVAL_SECONDS:
+        return
+    _last_poll_time = now
+
+    from app.state import migration_state
+
+    for dataset_id, state in list(migration_state.items()):
+        session_id = state.get("session_id")
+        if not session_id:
+            continue
+        # Skip already-merged datasets
+        if state.get("pr_merged"):
+            continue
+
+        try:
+            api_status = await _devin_client.get_session_status(session_id)
+            devin_status = api_status.get("status", "unknown")
+
+            # Update PR info from Devin API response
+            if api_status.get("pr_url"):
+                state["pr_url"] = api_status["pr_url"]
+                if api_status.get("pr_number"):
+                    state["pr_number"] = api_status["pr_number"]
+                logger.info(f"Dataset {dataset_id}: PR at {state['pr_url']}")
+
+            # Check if PR was merged
+            pr_state = api_status.get("pr_state", "")
+            if pr_state and pr_state.lower() in ("merged", "closed"):
+                state["pr_merged"] = True
+
+            # Map Devin session status to migration status
+            if devin_status in ("finished", "stopped"):
+                if state.get("pr_url"):
+                    state["status"] = MigrationStatus.COMPLETED
+                    state["status_message"] = "Migration script generated \u2014 PR ready for review"
+                else:
+                    state["status"] = MigrationStatus.COMPLETED
+                    state["status_message"] = "Migration script generated successfully"
+            elif devin_status == "error":
+                state["status"] = MigrationStatus.FAILED
+                state["status_message"] = api_status.get("status_message", "Session error")
+            elif devin_status in ("working", "blocked"):
+                msg = api_status.get("status_message", "")
+                if msg:
+                    state["status_message"] = msg
+        except Exception as e:
+            logger.warning(f"Failed to poll Devin session for {dataset_id}: {e}")
+
+
 @router.get("", response_model=list[DatasetInfo])
 async def list_datasets():
     """List all migration datasets with their current status and Kanban stage."""
+    await _refresh_active_sessions()
     from app.state import migration_state, custom_datasets
 
     datasets = []

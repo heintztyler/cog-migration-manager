@@ -150,6 +150,15 @@ async def get_migration_status(dataset_id: str):
         api_status = await devin_client.get_session_status(session_id)
         devin_status = api_status.get("status", "unknown")
 
+        # Update PR info from Devin API response
+        if api_status.get("pr_url"):
+            state["pr_url"] = api_status["pr_url"]
+            if api_status.get("pr_number"):
+                state["pr_number"] = api_status["pr_number"]
+        pr_state = api_status.get("pr_state", "")
+        if pr_state and pr_state.lower() in ("merged", "closed"):
+            state["pr_merged"] = True
+
         if devin_status in ("finished", "stopped"):
             state["status"] = MigrationStatus.COMPLETED
             state["status_message"] = "Migration script generated and committed successfully"
