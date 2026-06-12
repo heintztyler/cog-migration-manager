@@ -27,7 +27,7 @@ def _compute_stage(state: dict) -> KanbanStage:
     if status == MigrationStatus.IN_PROGRESS:
         return KanbanStage.DEVELOPMENT
     if status in (MigrationStatus.QUEUED,):
-        return KanbanStage.SCOPING
+        return KanbanStage.DEVELOPMENT
     if status == MigrationStatus.COMPLETED:
         return KanbanStage.MERGED
     return KanbanStage.BACKLOG

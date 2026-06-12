@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { AvailableSchema, Complexity } from '../types';
 import { fetchAvailableSchemas } from '../api/client';
 
@@ -26,6 +26,18 @@ export function CreateDatasetModal({ onClose, onCreate }: CreateDatasetModalProp
   const [recordCount, setRecordCount] = useState(10000);
   const [complexity, setComplexity] = useState<Complexity>('MEDIUM');
   const [duration, setDuration] = useState('45 min');
+  const [importOpen, setImportOpen] = useState(false);
+  const importRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (importRef.current && !importRef.current.contains(e.target as Node)) {
+        setImportOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   useEffect(() => {
     fetchAvailableSchemas().then(data => {
@@ -58,11 +70,45 @@ export function CreateDatasetModal({ onClose, onCreate }: CreateDatasetModalProp
       <div className="modal create-dataset-modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h2>Create Migration Dataset</h2>
+          <div className="header-actions">
+            <div className="import-dropdown" ref={importRef}>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => setImportOpen(!importOpen)}
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <path d="M7 1v9M4 7l3 3 3-3M2 12h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Import
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ marginLeft: 2 }}>
+                  <path d="M2.5 4l2.5 2.5L7.5 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+              {importOpen && (
+                <div className="import-menu">
+                  <button className="import-menu-item" onClick={() => { setImportOpen(false); }}>
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <rect x="1" y="1" width="14" height="14" rx="3" stroke="currentColor" strokeWidth="1.2" />
+                      <circle cx="8" cy="8" r="2.5" stroke="currentColor" strokeWidth="1.2" />
+                    </svg>
+                    Import from Linear
+                  </button>
+                  <button className="import-menu-item" onClick={() => { setImportOpen(false); }}>
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <path d="M2 5.5A3.5 3.5 0 015.5 2h2A3.5 3.5 0 0111 5.5v1A3.5 3.5 0 017.5 10h-2A3.5 3.5 0 012 6.5v-1z" stroke="currentColor" strokeWidth="1.2" />
+                      <path d="M5 10v1.5A3.5 3.5 0 008.5 15h2a3.5 3.5 0 003.5-3.5v-1A3.5 3.5 0 0010.5 7h-2" stroke="currentColor" strokeWidth="1.2" />
+                    </svg>
+                    Import from Jira
+                  </button>
+                </div>
+              )}
+            </div>
           <button className="modal-close" onClick={onClose}>
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
               <path d="M5 5l10 10M15 5l-10 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             </svg>
           </button>
+          </div>
         </div>
 
         <div className="create-form">

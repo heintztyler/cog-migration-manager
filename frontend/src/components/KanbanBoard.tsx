@@ -17,7 +17,6 @@ interface ColumnDef {
 }
 
 const COLUMNS: ColumnDef[] = [
-  { stage: 'SCOPING', label: 'Scoping', icon: '🔍', color: '#ffa726' },
   { stage: 'DEVELOPMENT', label: 'Development', icon: '⚡', color: '#4fc3f7' },
   { stage: 'TESTING', label: 'Testing', icon: '🧪', color: '#ab47bc' },
   { stage: 'AWAITING_REVIEW', label: 'Awaiting Review', icon: '👀', color: '#ff7043' },

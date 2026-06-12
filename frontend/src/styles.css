@@ -946,6 +946,55 @@ body {
   border-top: 1px solid var(--border);
 }
 
+/* Import Dropdown */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.import-dropdown {
+  position: relative;
+}
+
+.import-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  z-index: 300;
+  min-width: 200px;
+  overflow: hidden;
+}
+
+.import-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s;
+}
+
+.import-menu-item:hover {
+  background: rgba(79, 195, 247, 0.08);
+  color: var(--text-primary);
+}
+
+.import-menu-item + .import-menu-item {
+  border-top: 1px solid var(--border);
+}
+
 /* Utility */
 .mono {
   font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
