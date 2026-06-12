@@ -66,7 +66,7 @@ class DevinClient:
             return self._mock_session(title)
 
     async def get_session_status(self, session_id: str) -> dict:
-        """Get the current status of a Devin session."""
+        """Get the current status of a Devin session, including PR info."""
         if not self.is_configured:
             return {
                 "session_id": session_id,
@@ -79,11 +79,27 @@ class DevinClient:
             response = await client.get(f"/sessions/{session_id}")
             response.raise_for_status()
             data = response.json()
-            return {
+
+            result: dict = {
                 "session_id": session_id,
-                "status": data.get("status", "unknown"),
+                "status": data.get("status_enum", data.get("status", "unknown")),
                 "status_message": data.get("status_message", ""),
             }
+
+            # Extract PR info from pull_request field (PullRequestInfo / SessionPullRequest)
+            pr = data.get("pull_request")
+            if pr:
+                pr_url = pr.get("pr_url", pr.get("url", ""))
+                if pr_url:
+                    result["pr_url"] = pr_url
+                    result["pr_state"] = pr.get("pr_state", pr.get("state"))
+                    # Extract PR number from URL
+                    try:
+                        result["pr_number"] = int(pr_url.rstrip("/").split("/")[-1])
+                    except (ValueError, IndexError):
+                        pass
+
+            return result
         except Exception as e:
             logger.error(f"Failed to get session status: {e}")
             return {
