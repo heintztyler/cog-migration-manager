@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Dataset, SchemaInfo } from './types';
-import { fetchDatasets, fetchSourceSchema, fetchTargetSchema, startMigration, resetMigration } from './api/client';
+import type { Dataset, SchemaInfo, CreateDatasetPayload } from './types';
+import { fetchDatasets, fetchSourceSchema, fetchTargetSchema, startMigration, resetMigration, createDataset } from './api/client';
 import { Header } from './components/Header';
 import { SystemOverview } from './components/SystemOverview';
-import { DatasetCard } from './components/DatasetCard';
-import { SchemaModal } from './components/SchemaModal';
 import { StatsBar } from './components/StatsBar';
+import { KanbanBoard } from './components/KanbanBoard';
+import { BacklogPanel } from './components/BacklogPanel';
+import { SchemaModal } from './components/SchemaModal';
+import { CreateDatasetModal } from './components/CreateDatasetModal';
 import './styles.css';
 
 export default function App() {
@@ -14,6 +16,7 @@ export default function App() {
   const [sourceSchema, setSourceSchema] = useState<SchemaInfo | null>(null);
   const [targetSchema, setTargetSchema] = useState<SchemaInfo | null>(null);
   const [schemaModalOpen, setSchemaModalOpen] = useState(false);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [migrating, setMigrating] = useState<Set<string>>(new Set());
 
@@ -30,7 +33,7 @@ export default function App() {
 
   useEffect(() => {
     loadDatasets();
-    const interval = setInterval(loadDatasets, 5000);
+    const interval = setInterval(loadDatasets, 3000);
     return () => clearInterval(interval);
   }, [loadDatasets]);
 
@@ -74,6 +77,19 @@ export default function App() {
     }
   };
 
+  const handleCreate = async (payload: CreateDatasetPayload) => {
+    try {
+      await createDataset(payload);
+      await loadDatasets();
+      setCreateModalOpen(false);
+    } catch (err) {
+      console.error('Failed to create dataset:', err);
+    }
+  };
+
+  const backlogDatasets = datasets.filter(d => d.stage === 'BACKLOG');
+  const activeDatasets = datasets.filter(d => d.stage !== 'BACKLOG');
+
   if (loading) {
     return (
       <div className="app">
@@ -86,27 +102,25 @@ export default function App() {
   return (
     <div className="app">
       <Header />
-      <main className="main">
+      <main className="main-kanban">
         <SystemOverview />
         <StatsBar datasets={datasets} />
-        <section className="datasets-section">
-          <h2 className="section-title">Migration Datasets</h2>
-          <p className="section-desc">
-            Each dataset represents a logical grouping of records to be migrated from legacy systems
-            to the unified ALERP platform. Click "Start Migration" to launch a Devin session that
-            will analyze the schemas, generate transformation scripts, and test the migration.
-          </p>
-          <div className="datasets-grid">
-            {datasets.map(ds => (
-              <DatasetCard
-                key={ds.id}
-                dataset={ds}
-                onViewSchema={() => handleViewSchema(ds.id)}
-                onStartMigration={() => handleStartMigration(ds.id)}
-                onReset={() => handleReset(ds.id)}
-                isMigrating={migrating.has(ds.id)}
-              />
-            ))}
+        <section className="kanban-section">
+          <div className="kanban-layout">
+            <BacklogPanel
+              datasets={backlogDatasets}
+              onStartMigration={handleStartMigration}
+              onViewSchema={handleViewSchema}
+              onCreateNew={() => setCreateModalOpen(true)}
+              migratingIds={migrating}
+            />
+            <KanbanBoard
+              datasets={activeDatasets}
+              onViewSchema={handleViewSchema}
+              onStartMigration={handleStartMigration}
+              onReset={handleReset}
+              migratingIds={migrating}
+            />
           </div>
         </section>
       </main>
@@ -118,6 +132,13 @@ export default function App() {
           sourceSchema={sourceSchema}
           targetSchema={targetSchema}
           onClose={() => setSchemaModalOpen(false)}
+        />
+      )}
+
+      {createModalOpen && (
+        <CreateDatasetModal
+          onClose={() => setCreateModalOpen(false)}
+          onCreate={handleCreate}
         />
       )}
     </div>

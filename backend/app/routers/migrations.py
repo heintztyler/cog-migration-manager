@@ -1,7 +1,8 @@
 import os
+import time
 import logging
 from fastapi import APIRouter, HTTPException
-from app.models import MigrationRequest, MigrationStatus, SessionStatusResponse
+from app.models import MigrationRequest, MigrationStatus, SessionStatusResponse, KanbanStage
 from app.devin_client import DevinClient, build_migration_prompt
 from app.legacy_systems import system_alpha, system_bravo
 from app.unified_system import target_schema
@@ -11,7 +12,64 @@ router = APIRouter(prefix="/api/migrations", tags=["migrations"])
 
 devin_client = DevinClient()
 
-REPO_URL = os.environ.get("MIGRATION_REPO_URL", "https://github.com/heintztyler/erp-migration-accelerator")
+REPO_URL = os.environ.get("MIGRATION_REPO_URL", "https://github.com/heintztyler/cog-migration-manager")
+
+# Mock demo progression: after starting, cards advance through stages over time
+MOCK_STAGE_DURATIONS = {
+    "DEVELOPMENT": 15,
+    "TESTING": 10,
+    "AWAITING_REVIEW": 10,
+}
+
+
+def _compute_stage_from_state(state: dict) -> KanbanStage:
+    """Derive Kanban stage from state dict."""
+    if not state:
+        return KanbanStage.BACKLOG
+    if state.get("pr_merged"):
+        return KanbanStage.MERGED
+    if state.get("pr_url"):
+        return KanbanStage.AWAITING_REVIEW
+    status = state.get("status", MigrationStatus.NOT_STARTED)
+    if status == MigrationStatus.TESTING:
+        return KanbanStage.TESTING
+    if status == MigrationStatus.IN_PROGRESS:
+        return KanbanStage.DEVELOPMENT
+    if status == MigrationStatus.QUEUED:
+        return KanbanStage.SCOPING
+    if status == MigrationStatus.COMPLETED:
+        return KanbanStage.MERGED
+    return KanbanStage.BACKLOG
+
+
+def _maybe_advance_mock(state: dict) -> None:
+    """In demo mode (no API key), auto-advance cards through stages over time."""
+    if devin_client.is_configured:
+        return
+    started_at = state.get("started_at")
+    if not started_at:
+        return
+
+    elapsed = time.time() - started_at
+    dev_time = MOCK_STAGE_DURATIONS["DEVELOPMENT"]
+    test_time = dev_time + MOCK_STAGE_DURATIONS["TESTING"]
+    review_time = test_time + MOCK_STAGE_DURATIONS["AWAITING_REVIEW"]
+
+    if elapsed >= review_time:
+        state["status"] = MigrationStatus.COMPLETED
+        state["pr_merged"] = True
+        state["pr_url"] = state.get("pr_url", f"https://github.com/heintztyler/cog-migration-manager/pull/{state.get('mock_pr', 42)}")
+        state["status_message"] = "Migration script merged successfully"
+    elif elapsed >= test_time:
+        state["status"] = MigrationStatus.COMPLETED
+        state["pr_url"] = f"https://github.com/heintztyler/cog-migration-manager/pull/{state.get('mock_pr', 42)}"
+        state["pr_number"] = state.get("mock_pr", 42)
+        state["status_message"] = "PR opened — awaiting review"
+    elif elapsed >= dev_time:
+        state["status"] = MigrationStatus.TESTING
+        state["status_message"] = "Running transformation validation tests..."
+    else:
+        state["status_message"] = f"Generating migration script... ({int(elapsed)}s)"
 
 
 @router.post("/start")
@@ -58,11 +116,14 @@ async def start_migration(request: MigrationRequest):
 
     result = await devin_client.create_session(prompt=prompt, title=title)
 
+    import random
     migration_state[dataset_id] = {
         "status": MigrationStatus.IN_PROGRESS,
         "session_id": result["session_id"],
         "session_url": result["url"],
         "status_message": "Devin session created - analyzing schemas...",
+        "started_at": time.time(),
+        "mock_pr": random.randint(2, 50),
     }
 
     return {
@@ -97,6 +158,10 @@ async def get_migration_status(dataset_id: str):
             state["status_message"] = api_status.get("status_message", "Session encountered an error")
         else:
             state["status_message"] = api_status.get("status_message", state.get("status_message", ""))
+    else:
+        _maybe_advance_mock(state)
+
+    stage = _compute_stage_from_state(state)
 
     return SessionStatusResponse(
         dataset_id=dataset_id,
@@ -104,6 +169,8 @@ async def get_migration_status(dataset_id: str):
         session_url=state.get("session_url", ""),
         status=state.get("status", MigrationStatus.NOT_STARTED),
         status_message=state.get("status_message", ""),
+        stage=stage,
+        pr_url=state.get("pr_url"),
     )
 
 
@@ -114,12 +181,14 @@ async def get_all_migration_statuses():
 
     statuses = []
     for dataset_id, state in migration_state.items():
+        _maybe_advance_mock(state)
         statuses.append({
             "dataset_id": dataset_id,
             "session_id": state.get("session_id"),
             "session_url": state.get("session_url"),
             "status": state.get("status", MigrationStatus.NOT_STARTED),
             "status_message": state.get("status_message", ""),
+            "pr_url": state.get("pr_url"),
         })
     return statuses
 
@@ -135,7 +204,8 @@ async def reset_migration(dataset_id: str):
 
 
 def _find_dataset_def(dataset_id: str) -> dict | None:
-    for ds in target_schema.MIGRATION_DATASETS:
+    from app.state import custom_datasets
+    for ds in target_schema.MIGRATION_DATASETS + custom_datasets:
         if ds["id"] == dataset_id:
             return ds
     return None
