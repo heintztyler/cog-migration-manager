@@ -117,6 +117,16 @@ export function DatasetCard({ dataset, onViewSchema, onStartMigration, onReset, 
           </a>
         )}
 
+        {isActive && !dataset.session_url && (
+          <span className="btn btn-devin" style={{ opacity: 0.7, cursor: 'default' }} title="Add DEVIN_API_KEY to .env to enable live sessions">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.5" />
+              <circle cx="8" cy="8" r="2" fill="currentColor" />
+            </svg>
+            Devin Working (Demo)
+          </span>
+        )}
+
         {dataset.status === 'COMPLETED' && dataset.session_url && (
           <a
             href={dataset.session_url}

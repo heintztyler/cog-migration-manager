@@ -100,10 +100,10 @@ class DevinClient:
     @staticmethod
     def _mock_session(title: str) -> dict:
         import uuid
-        mock_id = str(uuid.uuid4())[:12]
+        mock_id = f"demo-{uuid.uuid4().hex[:8]}"
         return {
             "session_id": mock_id,
-            "url": f"https://app.devin.ai/sessions/{mock_id}",
+            "url": "",
             "status": "running",
         }
 
