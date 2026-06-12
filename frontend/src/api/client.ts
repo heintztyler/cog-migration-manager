@@ -1,4 +1,4 @@
-import type { Dataset, SchemaInfo, MigrationStatusResponse } from '../types';
+import type { Dataset, SchemaInfo, MigrationStatusResponse, AvailableSchema, CreateDatasetPayload } from '../types';
 
 const BASE = '/api';
 
@@ -16,6 +16,20 @@ async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
 
 export async function fetchDatasets(): Promise<Dataset[]> {
   return fetchJSON<Dataset[]>('/datasets');
+}
+
+export async function createDataset(payload: CreateDatasetPayload): Promise<Dataset> {
+  return fetchJSON<Dataset>('/datasets', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchAvailableSchemas(): Promise<{
+  source_schemas: AvailableSchema[];
+  target_schemas: AvailableSchema[];
+}> {
+  return fetchJSON('/datasets/schemas/available');
 }
 
 export async function fetchSourceSchema(datasetId: string): Promise<SchemaInfo> {

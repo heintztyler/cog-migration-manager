@@ -3,6 +3,15 @@ from typing import Optional
 from enum import Enum
 
 
+class KanbanStage(str, Enum):
+    BACKLOG = "BACKLOG"
+    SCOPING = "SCOPING"
+    DEVELOPMENT = "DEVELOPMENT"
+    TESTING = "TESTING"
+    AWAITING_REVIEW = "AWAITING_REVIEW"
+    MERGED = "MERGED"
+
+
 class MigrationStatus(str, Enum):
     NOT_STARTED = "NOT_STARTED"
     QUEUED = "QUEUED"
@@ -43,12 +52,26 @@ class DatasetInfo(BaseModel):
     complexity: Complexity
     estimated_duration: str
     status: MigrationStatus
+    stage: KanbanStage
     session_id: Optional[str] = None
     session_url: Optional[str] = None
+    pr_url: Optional[str] = None
+    pr_number: Optional[int] = None
 
 
 class MigrationRequest(BaseModel):
     dataset_id: str
+
+
+class CreateDatasetRequest(BaseModel):
+    name: str
+    description: str
+    source_system: str
+    source_table: str
+    target_table: str
+    record_count: int
+    complexity: Complexity
+    estimated_duration: str
 
 
 class MigrationSession(BaseModel):
@@ -65,6 +88,8 @@ class SessionStatusResponse(BaseModel):
     session_url: str
     status: str
     status_message: str
+    stage: KanbanStage
+    pr_url: Optional[str] = None
     last_update: Optional[str] = None
 
 
